@@ -89,77 +89,42 @@ export default function PostListItem({
     return formatDistanceToNow(new Date(post.created_at), { addSuffix: true });
   }, [post.created_at]);
 
-  // Check if the post is liked when the component mounts
+  // Add useEffect to refresh counters when post prop changes
   useEffect(() => {
-    const fetchLikeStatus = async () => {
-      if (!user) return; // Ensure user is defined
+    const fetchCounters = async () => {
       try {
-        const isLiked = await checkIfLiked(post.id, user.id);
-        setLiked(isLiked);
+        // Fetch like count
+        const { count: likeCount, error: likeError } = await supabase
+          .from('likes')
+          .select('*', { count: 'exact', head: true })
+          .eq('post_id', post.id);
+
+        if (!likeError) {
+          setLikeCount(likeCount || 0);
+        }
+
+        // Fetch comment count
+        const { count: commentCount, error: commentError } = await supabase
+          .from('comments')
+          .select('*', { count: 'exact', head: true })
+          .eq('post_id', post.id);
+
+        if (!commentError) {
+          setCommentCount(commentCount || 0);
+        }
+
+        // Check if the post is liked
+        if (user) {
+          const isLiked = await checkIfLiked(post.id, user.id);
+          setLiked(isLiked);
+        }
       } catch (error) {
-        console.error('Error fetching like status:', error);
-      }
-    };
-    
-    fetchLikeStatus();
-  }, [post.id, user.id]);
-
-  // Fetch like count when component mounts
-  useEffect(() => {
-    const fetchLikeCount = async () => {
-      const { count, error } = await supabase
-        .from('likes')
-        .select('*', { count: 'exact', head: true })
-        .eq('post_id', post.id);
-
-      if (error) {
-        console.error('Error fetching like count:', error);
-      } else {
-        setLikeCount(count || 0);
+        console.error('Error fetching counters:', error);
       }
     };
 
-    fetchLikeCount();
-  }, [post.id]);
-
-  // Move fetchCommentCount outside of useEffect
-  const fetchCommentCount = useCallback(async (postId: string) => {
-    try {
-      const { count, error } = await supabase
-        .from('comments')
-        .select('*', { count: 'exact', head: true })
-        .eq('post_id', postId);
-
-      if (error) throw error;
-      setCommentCount(count || 0);
-    } catch (error) {
-      console.error('Error fetching comment count:', error);
-    }
-  }, []);
-
-  // Update useEffect to use the callback
-  useEffect(() => {
-    fetchCommentCount(post.id);
-  }, [post.id, fetchCommentCount]);
-
-  // Add this useEffect to listen for comment changes
-  useEffect(() => {
-    const channel = supabase
-      .channel(`post:${post.id}:comments`)
-      .on('postgres_changes', {
-        event: '*',
-        schema: 'public',
-        table: 'comments',
-        filter: `post_id=eq.${post.id}`
-      }, () => {
-        fetchCommentCount(post.id);
-      })
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  }, [post.id, fetchCommentCount]);
+    fetchCounters();
+  }, [post.id, user?.id]);
 
   const handleLikePress = async () => {
     if (!user) {

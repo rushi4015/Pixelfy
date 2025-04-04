@@ -40,6 +40,7 @@ export default function FeedScreen() {
   const [selectedPostId, setSelectedPostId] = useState<string | null>(null);
   const [commentsPopupVisible, setCommentsPopupVisible] = useState(false);
   const [selectedCommentPostId, setSelectedCommentPostId] = useState<string | null>(null);
+  const [storyRefreshing, setStoryRefreshing] = useState(false);
 
   const scrollY = useRef(new Animated.Value(0)).current;
   const lastScrollY = useRef(0);
@@ -128,8 +129,19 @@ export default function FeedScreen() {
 
   const onRefresh = async () => {
     setRefreshing(true);
-    await fetchPosts(true);
+    setStoryRefreshing(true);
+    
+    // Refresh all components
+    await Promise.all([
+      fetchPosts(true),
+      checkUnseenNotifications(),
+    ]);
+    
+    // Force update the post list items by resetting the posts state
+    setPosts(prevPosts => [...prevPosts]);
+    
     setRefreshing(false);
+    setStoryRefreshing(false);
   };
 
   const handleNotificationPress = () => {
@@ -414,7 +426,7 @@ export default function FeedScreen() {
               contentContainerStyle={{ paddingTop: 50 }}
               ListHeaderComponent={
                 <View className="bg-white">
-                  <StoryList />
+                  <StoryList refreshing={storyRefreshing} />
                 </View>
               }
               refreshControl={
